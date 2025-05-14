@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Tools</title>
+
+    <!-- Библиотеки -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .box {
+            background: #fff;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            margin: 10px 0;
+            cursor: pointer;
+            width: 100%;
+        }
+        #reader {
+            width: 100%;
+            height: 300px;
+            border: 2px dashed #ccc;
+        }
+        #qr-output, #camera-output, #file-output {
+            margin: 20px 0;
+            word-break: break-word;
+        }
+        #copy-btn {
+            background: #4CAF50;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Генератор QR -->
+<div class="box">
+    <input type="text" id="input-text" placeholder="Введите текст">
+    <button onclick="generateQRCode()">Создать QR</button>
+    <div id="qr-output"></div>
+</div>
+
+<!-- Сканер с камеры -->
+<div class="box">
+    <button id="camera-btn" onclick="toggleCamera()">Включить камеру</button>
+    <div id="reader"></div>
+    <div id="camera-output"></div>
+</div>
+
+<!-- Сканирование с файла -->
+<div class="box">
+    <input type="file" id="file-input" accept="image/*">
+    <button onclick="scanFile()">Считать с файла</button>
+    <div id="file-output"></div>
+    <button id="copy-btn" onclick="copyLink()">Скопировать ссылку</button>
+</div>
+
+<script>
+    // Генератор QR
+    function generateQRCode() {
+        const input = document.getElementById('input-text').value;
+        const output = document.getElementById('qr-output');
+        output.innerHTML = '';
+        new QRCode(output, {
+            text: input,
+            width: 200,
+            height: 200
+        });
+    }
+
+    let qrScanner = null;
+    let isRunning = false;
+
+    async function toggleCamera() {
+        const button = document.getElementById('camera-btn');
+        const reader = document.getElementById('reader');
+
+        if (isRunning && qrScanner) {
+            await qrScanner.stop();
+            qrScanner.clear();
+            isRunning = false;
+            button.textContent = 'Включить камеру';
+            return;
+        }
+
+        qrScanner = new Html5Qrcode("reader");
+        qrScanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 250 },
+            (decodedText) => {
+                document.getElementById('camera-output').textContent = decodedText;
+                toggleCamera();
+            },
+            (error) => {
+                console.warn("QR Scan error:", error);
+            }
+        ).then(() => {
+            isRunning = true;
+            button.textContent = 'Выключить камеру';
+        }).catch((err) => {
+            console.error("Camera error:", err);
+            document.getElementById('camera-output').textContent = 'Ошибка камеры: ' + err;
+        });
+    }
+
+    function scanFile() {
+        const file = document.getElementById('file-input').files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const result = jsQR(imageData.data, canvas.width, canvas.height);
+
+                if (result) {
+                    document.getElementById('file-output').textContent = result.data;
+                    document.getElementById('copy-btn').style.display = 'block';
+                } else {
+                    document.getElementById('file-output').textContent = 'QR-код не найден';
+                    document.getElementById('copy-btn').style.display = 'none';
+                }
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function copyLink() {
+        const text = document.getElementById('file-output').textContent;
+        navigator.clipboard.writeText(text)
+            .then(() => alert('Скопировано!'))
+            .catch(() => alert('Ошибка копирования'));
+    }
+</script>
+
+</body>
+</html>
